@@ -94,7 +94,7 @@ class RedminePlugin(IssuePlugin):
         """Create a Redmine issue"""
         headers = { "X-Redmine-API-Key": self.get_option('key', group.project),
                     'content-type': 'application/json' }
-        url = urlparse.urljoin(self.get_option('host', group.project), "issues.json")
+        url = urlparse.urljoin(self.get_option('host', group.project), "/issues.json")
         payload = {
             'project_id': self.get_option('project_id', group.project),
             'tracker_id': self.get_option('tracker_id', group.project),
@@ -102,22 +102,19 @@ class RedminePlugin(IssuePlugin):
             'subject': form_data['title'].encode('utf-8'),
             'description': form_data['description'].encode('utf-8'),
         }
-        #print >> sys.stderr, "url:", url
-        #print >> sys.stderr, "payload:\n", pformat(payload)
-        #print >> sys.stderr, pformat(group)
-        #print >> sys.stderr, pformat(dir(group))
 
         try:
             r = requests.post(url, data=json.dumps({'issue': payload}), headers=headers)
         except requests.exceptions.HTTPError as e:
-            raise forms.ValidationError('Unable to reach Redmine host: %s' % repr(e))
+            raise forms.ValidationError('Unable to reach Redmine host: %s' % (e.reason,))
+
+        if not (200 <= r.status_code < 300):
+            raise forms.ValidationError('Redmine return code %s' % r.status_code)
 
         try:
             data = json.loads(r.text)
         except json.JSONDecodeError as e:
-            #print >> sys.stderr, "ERROR: %s" % e
-            #print >> sys.stderr, "RESP:", r.text
-            raise forms.ValidationError('Unable to reach Redmine host: %s' % repr(e))
+            raise forms.ValidationError('Unable to parse Redmine reply: %s, %r' % (str(e), r.status_code))
 
         if not 'issue' in data or not 'id' in data['issue']:
             raise forms.ValidationError('Unable to create redmine ticket')
